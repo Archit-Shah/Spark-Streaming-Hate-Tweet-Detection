@@ -39,7 +39,6 @@ class ConfBuildPipeline(args: Seq[String]) extends ScallopConf(args) {
   mainOptions = Seq(inputPath, modelPath)
   val inputPath = opt[String](descr = "Input Path", required = true)
   val modelPath = opt[String](descr = "Model Path", required = true)
-  // val reducers = opt[Int](descr = "number of reducers", required = false, default = Some(1))
   verify()
 }
 
@@ -64,10 +63,9 @@ object BuildPipeline extends Tokenizer {
     val newColumns = Seq("text", "type", "label")
     val textFile = sc.textFile(args.inputPath() + "/hatespeech_text_label_vote.csv")
 
-    val Array(training, test) = textFile.randomSplit(Array(0.9, 0.1), seed = 12345)
 
-	//Extract training data from the text file, filter usernames, hyperlinks and Retweet identifier. Convert the RDD to a Dataframe
-    val trainingData = training
+	//Extract data from the text file, filter usernames, hyperlinks and Retweet identifier. Convert the RDD to a Dataframe
+    val data = textFile
       .flatMap(line => {
         val tokens = tokenize(line)
         if (tokens.length > 0) tokens.take(tokens.length).sliding(tokens.length).toList else List()
@@ -76,14 +74,7 @@ object BuildPipeline extends Tokenizer {
       .map({case (k,v) => (k,v,if (v=="abusive" || v=="hateful") 1.0D else 0.0D)})
 	  .toDF(newColumns: _*)
 
-    val testingData = test
-      .flatMap(line => {
-        val tokens = tokenize(line)
-        if (tokens.length > 0) tokens.take(tokens.length).sliding(tokens.length).toList else List()
-      })
-      .map(line => line.take(line.length-1).filter(x => !((x.startsWith("http")) || (x.startsWith("rt") || (x.startsWith("@"))))).mkString(" ") -> line.last)
-      .map({case (k,v) => (k,v,if (v=="abusive" || v=="hateful") 1.0D else 0.0D)})
-	  .toDF(newColumns: _*)
+    val Array(trainingData, testingData) = data.randomSplit(Array(0.9, 0.1), seed = 12345)
 
 	//Pipeline Definition with 5 stages
 
@@ -115,10 +106,6 @@ object BuildPipeline extends Tokenizer {
 	// 5. Define the training algorithm
 	val lr = new LogisticRegression()
 	  .setMaxIter(10)
-	  // .setRegParam(0.2)
-	  // .setElasticNetParam(0.0)
-
-
 
 	//Initialise the the pipeline with pre-defined stages
 	val pipeline = new Pipeline().setStages(Array(custom_tokenizer, data_filter, hashingTF, idf, lr))
@@ -141,7 +128,7 @@ object BuildPipeline extends Tokenizer {
 	val lrModel = cv.fit(trainingData)
 
 	//Save the trained model into the Model Path, so it can be used later to predict
-	lrModel.write.save(args.modelPath() + "/lr-model")
+	lrModel.write.save(args.modelPath())
 
 
 	//Predict on the Testing data and display the overall accuracy of the model
@@ -154,6 +141,8 @@ object BuildPipeline extends Tokenizer {
 	var i = incorrect.count()
 	var accuracy = (c.toFloat/(c+i))*100
 
-	printf("The accuracy of model is %f",accuracy)
+	var percent = "%"
+
+	printf("The accuracy of model is %1.3f %s \n",accuracy,percent)
 
   }}
