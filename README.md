@@ -24,7 +24,8 @@ spark-submit --class ca.uwaterloo.cs451.project.BuildPipeline \
 
 3. Execute StreamTwitter class to stream live tweets from Twitter and identify hateful/abusive tweets
 ```bash
-mvn clean package
+spark-submit --class ca.uwaterloo.cs451.project.StreamTwitter \
+   target/assignments-1.0.jar --model-path Model/lr-model --output-path TwitterStreamResults --num-batch 3
 ```
 
 ## Acknowledgement
